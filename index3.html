@@ -1,0 +1,374 @@
+<!-- Chosen Palette: Warm Neutral (Stone, Amber) -->
+<!-- Application Structure Plan: 本應用的架構設計是為了讓同行旅伴能直觀地探索這趟9天的行程。資訊架構分為兩層：一個「總覽」視圖和「每日行程」視圖。使用者可以透過頂部的導航列在「總覽」和「Day 1」到「Day 9」之間切換。
+- 「總覽」視圖：提供企劃的摘要，並透過一個簡易的長條圖（使用 Chart.js）視覺化呈現此行的四大主題（爵士喫茶、溫泉、威士忌、特色美食）的活動次數，讓旅伴能快速建立對這趟旅程的整體印象。
+- 「每日行程」視圖：為 D1 至 D9 每天建立一個獨立的內容區塊。使用者點擊導航列的日期時，JavaScript 會顯示對應的區塊並隱藏其他區塊。每個每日行程都由一系列「活動卡片」組成，每張卡片代表一個活動（如交通、住宿、喫茶、景點等），並使用 Unicode 圖示增加可讀性，並新增了 Google Map 連結。
+- 這種以「天」為單位的分頁(Tab)結構被選用，因為它完全符合旅行計畫的線性時間流，是最直接且使用者最容易理解的互動方式。 -->
+<!-- Visualization & Content Choices:
+- [行程總覽] -> 目標: 告知旅程核心 -> 呈現方式: HTML 文字。
+- [活動主題分析] -> 目標: 告知旅程重點分佈 -> 呈現方式: 水平長條圖 (Chart.js Canvas) -> 互動: 鼠標懸停顯示工具提示(Tooltip) -> 理由: 快速視覺化展現旅程的「風味」與主題比例 -> 庫/方法: Chart.js。
+- [行程導航] -> 目標: 組織並切換每日行程 -> 呈現方式: HTML/Tailwind 導航按鈕 -> 互動: 點擊切換顯示的內容區塊 -> 理由: 對於時間序列的行程表來說，這是最直觀的導航模式 -> 庫/方法: Vanilla JS。
+- [每日活動] -> 目標: 告知當天詳細計畫 -> 呈現方式: 條列式的 HTML/Tailwind 卡片 (新增地圖連結) -> 互動: 點擊地圖圖示開啟新分頁連結 -> 理由: 卡片式設計能將每個活動清楚區塊化，搭配地圖連結能提升實用性 -> 庫/方法: HTML/CSS/Tailwind + Unicode 圖示 + Vanilla JS。
+- 確認：無 SVG 圖形。無 Mermaid JS。 -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 爵士喫茶之旅 互動行程 (含地圖)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        }
+        .nav-btn {
+            @apply px-3 py-2 text-sm md:px-4 md:py-3 font-medium text-stone-600 hover:bg-amber-100 hover:text-amber-800 rounded-lg transition-all duration-200 cursor-pointer;
+        }
+        .nav-btn.active {
+            @apply bg-amber-500 text-white shadow-md hover:bg-amber-600 hover:text-white;
+        }
+        .content-panel {
+            @apply p-4 md:p-6 bg-white rounded-lg shadow-inner;
+        }
+        .activity-card {
+            @apply bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4 flex items-start space-x-4 shadow-sm;
+        }
+        .activity-icon {
+            @apply text-2xl mt-1 text-amber-600 flex-shrink-0 w-8 text-center;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px;
+            max-height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-stone-100 min-h-screen">
+
+    <div class="container mx-auto max-w-5xl p-4 md:p-8">
+        
+        <header class="text-center mb-6 md:mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-stone-800">爵士、溫泉與雪國的九日詩篇</h1>
+            <p class="text-lg md:text-xl text-stone-600 mt-2">2026 北海道至熱海之旅 互動行程</p>
+        </header>
+
+        <nav class="mb-6 bg-white rounded-lg shadow-md p-2">
+            <div class="flex flex-wrap justify-center gap-1 md:gap-2">
+                <button id="nav-overview" class="nav-btn active">總覽</button>
+                <button id="nav-day-1" class="nav-btn">Day 1</button>
+                <button id="nav-day-2" class="nav-btn">Day 2</button>
+                <button id="nav-day-3" class="nav-btn">Day 3</button>
+                <button id="nav-day-4" class="nav-btn">Day 4</button>
+                <button id="nav-day-5" class="nav-btn">Day 5</button>
+                <button id="nav-day-6" class="nav-btn">Day 6</button>
+                <button id="nav-day-7" class="nav-btn">Day 7</button>
+                <button id="nav-day-8" class="nav-btn">Day 8</button>
+                <button id="nav-day-9" class="nav-btn">Day 9</button>
+            </div>
+        </nav>
+
+        <main id="content-area">
+            
+            <div id="view-overview" class="content-panel">
+                <h2 class="text-2xl font-bold text-amber-700 mb-4">🎯 旅程總覽</h2>
+                <p class="text-stone-700 mb-6 leading-relaxed">
+                    哈囉，旅伴們！這份互動行程是為了方便大家預覽我們即將展開的「北海道-東北-東京-熱海 爵士喫茶之旅」。
+                    本次我們即將從北海道開始，一路往南最遠到伊豆半島的入口－熱海，探查各家爵士喫茶店。中途會搭乘各種新幹線，當然溫泉也是不可少的。
+                    你可以在上方點擊「總覽」或「Day 1」到「Day 9」來切換想看的內容。
+                </p>
+
+                <h3 class="text-xl font-bold text-stone-800 mb-4">旅程主題分析</h3>
+                <p class="text-stone-700 mb-6">
+                    這趟旅程結合了我們最愛的幾大元素。我大致統計了一下行程中的主要活動，可以很清楚看到這是一趟以「爵士喫茶」為絕對核心，並穿插「溫泉」、「威士忌」與「特色美食」的深度探索之旅。
+                </p>
+                <div class="chart-container">
+                    <canvas id="themeChart"></canvas>
+                </div>
+            </div>
+
+            <div id="view-day-1" class="content-panel" style="display: none;"></div>
+            <div id="view-day-2" class="content-panel" style="display: none;"></div>
+            <div id="view-day-3" class="content-panel" style="display: none;"></div>
+            <div id="view-day-4" class="content-panel" style="display: none;"></div>
+            <div id="view-day-5" class="content-panel" style="display: none;"></div>
+            <div id="view-day-6" class="content-panel" style="display: none;"></div>
+            <div id="view-day-7" class="content-panel" style="display: none;"></div>
+            <div id="view-day-8" class="content-panel" style="display: none;"></div>
+            <div id="view-day-9" class="content-panel" style="display: none;"></div>
+
+        </main>
+        
+        <footer class="text-center mt-8 text-stone-500 text-sm">
+            <p>行程企劃 by 旅團團長 | 互動介面 by AI</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const MAP_API_BASE = "https://www.google.com/maps/search/?api=1&query=";
+
+            const tripData = {
+                overview: {
+                    title: "北海道-東北-東京-熱海 爵士喫茶之旅",
+                    summary: "本次我們即將從北海道開始，一路往南最遠到伊豆半島的入口－熱海，探查各家爵士喫茶店。中途會搭乘各種新幹線，當然溫泉也是不可少的。就讓我們看下去吧。",
+                    themes: [
+                        { type: "爵士喫茶", count: 10 },
+                        { type: "溫泉", count: 4 },
+                        { type: "威士忌/蒸餾所", count: 2 },
+                        { type: "特色美食", count: 4 }
+                    ]
+                },
+                days: [
+                    {
+                        date: "Day 1 (1/19 星期一)",
+                        title: "抵達北海道，前往小樽",
+                        activities: [
+                            { type: "交通", name: "新千歲空港 -> 小樽", details: "抵達新千歲空港之後，我們即將直接搭電車直達小樽。出電車之後記得帶上你的圍巾、手套，我們即將在銀白色的日本國境之北展開旅程。" },
+                            { type: "爵士喫茶", name: "小樽 FreeLance", details: "這是家小小的爵士喫茶，希望我們三個人進去的時候有位子坐。老闆會在店裡燒著木材暖爐。", mapLink: MAP_API_BASE + "小樽+FreeLance" },
+                            { type: "住宿", name: "小樽 Little Barrel", details: "這棟建築大概有百年的歷史，前身是外科診所，在當時就引入了西方的建築風格。現在變成 Guest House，每間房間都有特色。", mapLink: MAP_API_BASE + "小樽+Little+Barrel" }
+                        ]
+                    },
+                    {
+                        date: "Day 2 (1/20 星期二)",
+                        title: "余市威士忌 & 札幌爵士夜",
+                        activities: [
+                            { type: "威士忌", name: "余市威士忌蒸餾所", details: "早上我們即將去參觀目前唯一還在使用燒炭方式在運作蒸餾器的余市威士忌的蒸餾所，如果運氣好的話，我們有機會看到正在運作中的蒸餾器。" },
+                            { type: "交通", name: "余市 -> 札幌", details: "接下來中午過後我們即將往札幌前進。" },
+                            { type: "爵士喫茶", name: "Jamica", details: "如意算盤是在平日下午，造訪爵士喫茶名店 Jamica。特色 : JBL Paragon", mapLink: MAP_API_BASE + "Modern+Jazz+Jamaica+Sapporo" },
+                            { type: "景點", name: "札幌唱片店", details: "下午還有時間的話可以去札幌的唱片店探險看看。" },
+                            { type: "爵士喫茶", name: "Slowboat (Live)", details: "晚上我們即將去福居良先生的店 Slowboat 聆聽近距離的爵士樂。這是家藏身在商業建築中的小店。", mapLink: MAP_API_BASE + "札幌+Slowboat" },
+                            { type: "住宿", name: "HOTEL + HOSTEL SAPPORO", details: "就在 Slowboat 附近的背包客棧，但是我訂到了三個人一間的獨立房間。", mapLink: "https://maps.app.goo.gl/t1brEMEU98isDptx6" }
+                        ]
+                    },
+                    {
+                        date: "Day 3 (1/21 星期三)",
+                        title: "札幌 -> 函館，百萬夜景",
+                        activities: [
+                            { type: "交通", name: "札幌 -> 函館 (特急電車)", details: "這天我們會比較長距離的移動，從札幌坐特急電車到北海道的南端－函館。我們會在車站上車前購買在火車上要吃的火車便當。" },
+                            { type: "景點", name: "函館山夜景", details: "如果要完整拍攝到函館的夜景，那麼就要在太陽下山前搭乘纜車上函館山。接者好好的感受函館百萬夜景。" },
+                            { type: "美食", name: "小丑漢堡", details: "下山之後前往函館著名的漢堡店「小丑漢堡」享用晚餐，這是家只有開在函館的速食店。" },
+                            { type: "爵士喫茶", name: "Jazz Spot Leaf", details: "晚上前往一家小小家的爵士喫茶，Jazz Spot Leaf。特色 : 函館唯一一家我去過的爵士喫茶", mapLink: MAP_API_BASE + "函館+Jazz+Spot+Leaf" },
+                            { type: "住宿", name: "センチュリーマリーナ函館", details: "特色 : 空中露天溫泉風呂，完全不怕熊害！而且隔天早餐還有豐盛的海鮮自助餐！", mapLink: MAP_API_BASE + "センチュリーマリーナ函館" }
+                        ]
+                    },
+                    {
+                        date: "Day 4 (1/22 星期四)",
+                        title: "函館悠哉日",
+                        activities: [
+                            { type: "景點", name: "金森倉庫群 / 五稜郭", details: "這天比較悠哉，依舊是待在函館地區，可以逛逛金森倉庫群，或是參觀五稜郭。" },
+                            { type: "溫泉", name: "谷地頭溫泉", details: "傍晚我們將會去泡當地人會利用的溫泉設施「谷地頭」溫泉。" },
+                            { type: "爵士喫茶", name: "Leaf (二訪) 或 想苑", details: "如果不排斥的話可以再去一次 Leaf ，又或是在我名單上還沒去過的「想苑」", mapLink: MAP_API_BASE + "函館+想苑" }
+                        ]
+                    },
+                    {
+                        date: "Day 5 (1/23 星期五)",
+                        title: "海底隧道 -> 八戶 -> 仙台",
+                        activities: [
+                            { type: "交通", name: "函館 -> 八戶市", details: "這天我們即將搭電車通過海底隧道，前往日本本島了。我們中午會前往青森縣的八戶市。" },
+                            { type: "美食", name: "八食中心 (七厘村)", details: "那邊的有個海鮮市場「八食中心」。可以讓你用傳統的日式烤爐現烤市場賣的海鮮來享用！" },
+                            { type: "景點", name: "八戶市街", details: "用完餐之後，視狀況可以前往八戶市街走走，畢竟難得來這個日本東北的小城市。" },
+                            { type: "交通", name: "八戶 -> 仙台", details: "之後我們就會坐車前往仙台。" },
+                            { type: "爵士喫茶", name: "Count", details: "當晚我們會前往我最熟悉的爵士喫茶店，Count。特色 : 應該是現役日本最老的爵士喫茶店...", mapLink: MAP_API_BASE + "仙台+Count+Jazz" },
+                            { type: "住宿", name: "ホテル定禅寺", details: "普通的商務旅館 但是價格合理 離 Count 近", mapLink: MAP_API_BASE + "ホテル定禅寺+仙台" }
+                        ]
+                    },
+                    {
+                        date: "Day 6 (1/24 星期六)",
+                        title: "宮城峽 -> 飯坂溫泉",
+                        activities: [
+                            { type: "威士忌", name: "宮城峽蒸餾所", details: "這天白天早上可以前往日本另一個知名、有著好山好水的蒸餾所，宮城峽蒸餾所見學。" },
+                            { type: "爵士喫茶", name: "Basie (朝聖)", details: "同時我們會去已經沒有在營運，但是啟蒙 Count 老闆的一之關爵士喫茶老店 Basie 拜訪，也許就是門口拍拍照，記錄歷史。", mapLink: MAP_API_BASE + "一之關+Basie+Jazz" },
+                            { type: "交通", name: "仙台 -> 飯坂溫泉", details: "傍晚我們將繼續往南移動，到福島的小溫泉地「飯坂溫泉」。" },
+                            { type: "溫泉", name: "飯坂溫泉 (歷史溫泉)", details: "晚上我們會去當地的歷史溫泉設施，連日本詩人松尾芭蕉也曾經造訪過的溫泉地。這邊的街景建築也都很有特色。" },
+                            { type: "住宿", name: "旅館 やまと", details: "價格超實在！手作料理有誠意... 日本古民家風格的建築。和式房間。", mapLink: MAP_API_BASE + "旅館+やまと+飯坂溫泉" }
+                        ]
+                    },
+                    {
+                        date: "Day 7 (1/25 星期日)",
+                        title: "溫泉 -> 熱海 -> 橫濱",
+                        activities: [
+                            { type: "交通", name: "飯坂溫泉 -> 東京 (新幹線)", details: "這天我們離開飯坂溫泉之後，我們會搭新幹線前往東京。" },
+                            { type: "交通", name: "東京 -> 熱海 (展望列車)", details: "短暫下車採買火車便當之後，我們即將搭乘特別的展望列車前往伊豆半島的入口—熱海。" },
+                            { type: "溫泉", name: "熱海溫泉 (日歸)", details: "雖然我們晚上沒有住在這邊，但是我們依舊可以去有著絕佳海景的溫泉旅館泡湯！" },
+                            { type: "景點", name: "熱海商店街", details: "泡完澡後我們可以小逛一下熱海的商店街，這邊每到週末擠滿了從東京來觀光的旅客。" },
+                            { type: "交通", name: "熱海 -> 橫濱", details: "傍晚我們會搭車前往橫濱，在這個港都我們也可以看到漂亮的夜景。" },
+                            { type: "爵士喫茶", name: "Down Beat", details: "忘了是哪個日本人推薦給我的… 原本我說我要去最老的爵士喫茶店「Chigusa」對方說 DB 比較好 XD", mapLink: MAP_API_BASE + "橫濱+Down+Beat+Jazz" },
+                            { type: "爵士喫茶", name: "Chigusa", details: "據說是爵士喫茶的發跡店...現在似乎有博物館之類的存在，總之…去看看吧。", mapLink: MAP_API_BASE + "橫濱+Chigusa+Jazz" },
+                            { type: "住宿", name: "GuestHouse FUTARENO", details: "一家小小家很精緻的 Guest House 重點是離我們要去的爵士喫茶店都不算遠", mapLink: MAP_API_BASE + "GuestHouse+FUTARENO+橫濱" }
+                        ]
+                    },
+                    {
+                        date: "Day 8 (1/26 星期一)",
+                        title: "東京：澀谷 & 新宿",
+                        activities: [
+                            { type: "交通", name: "橫濱 -> 東京", details: "這天我們終於要正式進入東京了。" },
+                            { type: "景點", name: "澀谷/新宿唱片行", details: "中午到下午我們可以逛澀谷的唱片行，有興趣的話可以跟我一起去一家巴西音樂專門的獨立唱片行。" },
+                            { type: "爵士喫茶", name: "Lion (古典音樂喫茶)", details: "晚上可以去澀谷著名的古典音樂喫茶 Lion。雖然他不是爵士喫茶，但是絕對值得造訪。這家店私語禁止。特色 : 兩層樓高的巨大喇叭。", mapLink: MAP_API_BASE + "澀谷+Lion+喫茶" },
+                            { type: "美食", name: "茶亭羽當 (咖啡)", details: "下午有想要找地方休息的話，也許可以去我認識的咖啡店「茶亭羽當」" },
+                            { type: "住宿", name: "ホテルマリナーズコート東京", details: "介在築地市場跟豐洲市場之間的奇妙地點...方便我們隔天去豐州或是築地市場。", mapLink: MAP_API_BASE + "ホテルマリナーズコート東京" }
+                        ]
+                    },
+                    {
+                        date: "Day 9 (1/27 星期二)",
+                        title: "東京最終日：市場美食",
+                        activities: [
+                            { type: "美食", name: "築地市場 (牛雜丼)", details: "早餐如果願意吃牛雜丼的話，可以跟我一起騎車去築地市場吃早餐。" },
+                            { type: "交通", name: "築地 -> 豐洲 (自行車)", details: "中午如果天氣好，我們會一起租借公共自行車，騎過跨海大橋前往豐洲市場。" },
+                            { type: "美食", name: "豐洲市場 (炸海鮮丼)", details: "在那邊有著以前在築地市場的老店。一起吃完炸海鮮丼之後..." },
+                            { type: "景點", name: "自由行動 / 歸途", details: "回旅館領著行李去市區寄放，之後看有什麼想一起去的店，又或是要趕飛機，就自由行動啦！" }
+                        ]
+                    }
+                ]
+            };
+
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const contentPanels = document.querySelectorAll('.content-panel');
+            const contentArea = document.getElementById('content-area');
+
+            function getIconForType(type) {
+                switch (type) {
+                    case "爵士喫茶": return "🎷";
+                    case "住宿": return "🏨";
+                    case "交通": return "🚅";
+                    case "景點": return "🗺️";
+                    case "美食": return "🍔";
+                    case "溫泉": return "♨️";
+                    case "威士忌": return "🥃";
+                    default: return "📌";
+                }
+            }
+
+            function renderDayViews() {
+                tripData.days.forEach((day, index) => {
+                    const dayId = `day-${index + 1}`;
+                    const panel = document.getElementById(`view-${dayId}`);
+                    if (panel) {
+                        let activitiesHtml = day.activities.map(activity => {
+                            const mapLinkHtml = activity.mapLink ? 
+                                `<a href="${activity.mapLink}" target="_blank" class="text-amber-500 hover:text-amber-700 ml-2 transition-colors duration-150" aria-label="在地圖上開啟 ${activity.name}">📍</a>` : 
+                                '';
+                            
+                            return `
+                                <div class="activity-card">
+                                    <div class="activity-icon">${getIconForType(activity.type)}</div>
+                                    <div>
+                                        <h4 class="font-bold text-stone-800 flex items-center">
+                                            ${activity.name} 
+                                            ${mapLinkHtml}
+                                            <span class="text-sm font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 ml-2">${activity.type}</span>
+                                        </h4>
+                                        <p class="text-stone-600 mt-1">${activity.details}</p>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+
+                        panel.innerHTML = `
+                            <h2 class="text-2xl font-bold text-amber-700 mb-2">${day.date}</h2>
+                            <h3 class="text-xl font-semibold text-stone-700 mb-6">${day.title}</h3>
+                            ${activitiesHtml}
+                        `;
+                    }
+                });
+            }
+
+            function renderThemeChart() {
+                const ctx = document.getElementById('themeChart').getContext('2d');
+                const data = tripData.overview.themes;
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(item => item.type),
+                        datasets: [{
+                            label: '主要活動次數',
+                            data: data.map(item => item.count),
+                            backgroundColor: 'rgba(217, 119, 6, 0.7)',
+                            borderColor: 'rgba(217, 119, 6, 1)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    display: false,
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                displayColors: false,
+                                titleFont: {
+                                    weight: 'bold'
+                                },
+                                bodyFont: {
+                                    size: 14
+                                },
+                            }
+                        }
+                    }
+                });
+            }
+
+            function switchView(viewId) {
+                contentPanels.forEach(panel => {
+                    panel.style.display = 'none';
+                });
+                
+                navButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                const targetPanel = document.getElementById(`view-${viewId}`);
+                if (targetPanel) {
+                    targetPanel.style.display = 'block';
+                }
+
+                const targetNav = document.getElementById(`nav-${viewId}`);
+                if (targetNav) {
+                    targetNav.classList.add('active');
+                }
+            }
+
+            function init() {
+                renderDayViews();
+                renderThemeChart();
+
+                navButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const viewId = btn.id.replace('nav-', '');
+                        switchView(viewId);
+                    });
+                });
+
+                switchView('overview');
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
